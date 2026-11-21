@@ -62,7 +62,7 @@ class Rails(unittest.TestCase):
         self.assertEqual((r.axis, r.start, r.end, r.fixed), (1, 27., 0.,
                                                               {0: 10.5}))
         for bad in ('X10.5', 'X1:2 Y3:4', 'Q3 Y1:0', 'X1 X2 Y0:1', 'Y5:5',
-                    'Xa Y1:0'):
+                    'Xa Y1:0', 'X1 Y2 Z5:0'):
             self.assertRaises(ValueError, npz.Rail, bad)
 
     def test_classify(self):

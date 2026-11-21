@@ -23,7 +23,7 @@
 #   type: reserved  entered only after NPZ_OPEN ZONE=<name>. A move that
 #                   starts inside may leave.
 #   type: rails     the toolhead may only travel along the declared rails.
-#                   A rail is a straight path along one axis, written as
+#                   A rail is a straight path along X or Y, written as
 #                   "X10.5 Y27:0" (at X 10.5, from Y 27 to Y 0). Moving
 #                   from the first value toward the second is INWARD and
 #                   needs NPZ_OPEN; moving back is OUTWARD and is always
@@ -90,7 +90,7 @@ def fmt_pos(p):
 
 
 class Rail:
-    """A straight path along one axis: "X10.5 Y27:0" = at X 10.5, from Y 27
+    """A straight path along X or Y: "X10.5 Y27:0" = at X 10.5, from Y 27
     (outer end) to Y 0 (inner end). Axes that are not given are free, but
     must stay constant during a move along the rail."""
     def __init__(self, text):
@@ -120,6 +120,9 @@ class Rail:
                 raise ValueError("'%s': %s" % (tok, e))
         if self.axis is None:
             raise ValueError("one axis needs a range <from>:<to>, e.g. Y27:0")
+        if self.axis == 2:
+            raise ValueError("a rail runs along X or Y; moves of Z alone in a"
+                             " rails zone follow z_moves")
         if abs(self.end - self.start) < 10. * EPS:
             raise ValueError("the range has zero length")
         self.sign = 1. if self.end > self.start else -1.

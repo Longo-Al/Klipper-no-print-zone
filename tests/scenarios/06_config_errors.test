@@ -38,6 +38,11 @@ NPZ_STATUS
 #! expect: error: no filament_switch_sensor named 'nope'
 NPZ_STATUS
 
+### C10_rail_along_z
+#! set: no_print_zone dock | rails | X10.5 Y5 Z10:2
+#! expect: error: a rail runs along X or Y
+NPZ_STATUS
+
 ### C09_bad_zone_name
 #! set: no_print_zone bad-name | type | keepout
 #! expect: error: section must be named [no_print_zone NAME]

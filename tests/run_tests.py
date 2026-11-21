@@ -24,6 +24,8 @@
 #                                  must appear in the log
 #   #! log_has: TEXT / #! log_not: TEXT   extra checks on the log
 #   #! set: SECTION | OPTION | VALUE       config variant for this scenario
+#   #! include: FILE               config variant that also includes FILE
+#                                  (relative to the config folder)
 #   #! keep_state                  keep the state file of the previous run
 #   #! state: JSON                 write this content into the state file
 #   #! sdfile: NAME ... #! end     lines in between go to a virtual SD file
@@ -81,6 +83,7 @@ class Scenario:
         self.name = name
         self.expect = None
         self.log_has, self.log_not, self.sets = [], [], []
+        self.includes = []
         self.keep_state = False
         self.state = None
         self.sdfiles = {}
@@ -104,6 +107,8 @@ class Scenario:
                     if len(parts) != 3:
                         raise ValueError('%s: bad set: %s' % (path, val))
                     self.sets.append(parts)
+                elif key == 'include':
+                    self.includes.append(val)
                 elif key == 'keep_state':
                     self.keep_state = True
                 elif key == 'state':
@@ -220,8 +225,9 @@ def main():
         sys.exit('duplicate scenario names: %s' % (', '.join(dup),))
     for sc in scenarios:
         cfg = main_cfg
-        if sc.sets:
-            add = ''.join('[%s]\n%s: %s\n' % tuple(s) for s in sc.sets)
+        if sc.sets or sc.includes:
+            add = ''.join('[include %s]\n' % (f,) for f in sc.includes)
+            add += ''.join('[%s]\n%s: %s\n' % tuple(s) for s in sc.sets)
             cfg = os.path.join(cfg_dir, '_variant_%s.cfg' % (sc.name,))
             with open(cfg, 'w') as f:
                 f.write(insert_config(base_text, add))

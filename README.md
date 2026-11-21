@@ -18,6 +18,10 @@ y_min: 285
 z_max: 12
 ```
 
+**Install** with one line ([below](#install)). **Configure** with the
+[configuration guide](docs/configuration.md), or let the wizard write the
+zones for you.
+
 ## Features
 
 - **Any number of zones**, each a box aligned to the axes, in X, Y and **Z**.
@@ -145,164 +149,79 @@ managed_services: klipper
 If Klipper is reinstalled, run the installer again. Until you do, Klipper
 refuses to start (unknown section), so it fails safe.
 
-## Coordinates and geometry
+## Configuration
 
-- Zones use **toolhead coordinates**: the position Klipper reports as
-  `toolhead.position`, after G-code offsets and bed mesh compensation.
-- A zone is the **open** box: its faces belong to the outside, so a move may
-  run along a face. With `x_max: 11`, X 11 is outside.
-- The whole segment of each move is checked, not just its end point. A
-  diagonal that cuts a corner is caught.
-- **Unknown position.** Before an axis is homed, a zone counts as covering
-  that whole axis: an X move with Y unknown cannot touch the X range of a
-  zone.
-  - **Z not homed.** Klipper allows X/Y moves before Z homing, and
-    `safe_z_home` travels to its probing point with Z unknown, often over a
-    purge bucket in the homing corner. So by default, `keepout` and
-    `reserved` zones limited in Z (`z_min`/`z_max`) are ignored until Z is
-    homed. Set `unknown_z: full_height` to count them as full height
-    instead. `rails` zones always count as full height.
-  - Homing and probing moves, and the retract after homing, are not checked:
-    their coordinates are fictitious.
+**Full guide: [docs/configuration.md](docs/configuration.md).** It covers
+step by step setup, every option, rails, Z, macros and status variables,
+complete examples, and every error message with its fix.
 
-## Zone types
-
-| type       | entering                         | a move starting inside       |
-|------------|----------------------------------|------------------------------|
-| `keepout`  | never                            | may leave                    |
-| `reserved` | only while open (`NPZ_OPEN`)     | may leave                    |
-| `rails`    | only along a rail, inward only while open | only along a rail; outward is always allowed |
-
-### Rails
-
-A rail is a straight path along one axis:
-
-```
-X10.5 Y27:0     at X 10.5, from Y 27 (outer end) to Y 0 (inner end)
-Y0 X10.5:0      at Y 0, from X 10.5 to X 0
-```
-
-- Moving from the outer end toward the inner end is **inward**. It needs the
-  zone open, and the move must start and end within the rail.
-- Moving back is **outward** and always allowed. It may start anywhere on the
-  rail line that is not deeper than the inner end, and it may continue past
-  the outer end, out of the zone.
-- Axes not written in the rail are free but must stay constant during the
-  move. Z in particular: a rail move that also changes Z is refused. If a bed
-  mesh is active over the zone, set `z_tolerance`.
-- Anything else in a `rails` zone is refused: diagonals, moves off the rails,
-  sideways moves. If the toolhead ends up off the rails, nothing moves: turn
-  the motors off, free it by hand, then `NPZ_CLEAR CONFIRM=1`.
-
-```
-   Y
-   ^         outer end Y27
-   |   .  .  .  .|.  .  .  .  .  .     <- zone boundary y_max 22
-   |             |  inward: -Y (open)
-   |    zone     |  outward: +Y (always)
-   |             |
-   +-------------+------------------> X
-   X0  <-- press  X10.5   (rail "Y0 X10.5:0": inward -X, outward +X)
-```
-
-## Configuration reference
+Zones go in `no_print_zone.cfg`, which the installer creates next to
+`printer.cfg`. That file is a commented reference of every option. Use one
+section per zone:
 
 ```ini
-[no_print_zone]
-#state_file: <config dir>/no_print_zone.json
-#   Where zones holding the toolhead are remembered across restarts.
-#tolerance: 0.01
-#   mm: how close to a rail a move must be.
-#tested_klipper_version:
-#   The Klipper version (git describe) you ran the tests on. When it
-#   differs, a warning is shown until you test again and update it.
-#block_force_move: True
-#   Refuse FORCE_MOVE on the steppers of the kinematics.
-#unknown_z: ignore
-#   keepout/reserved zones limited in Z, while Z is not homed:
-#   ignore | full_height (see "Unknown position").
+[no_print_zone purge]          # strip for purge lines: only from your macros
+type: reserved
+x_max: 15                      # no x_min: it reaches the end of travel
+y_min: 22
+y_max: 340
 
-[no_print_zone NAME]
-#   NAME: letters, digits and _. Used in NPZ_OPEN ZONE=NAME.
-type:
-#   keepout | reserved | rails (required)
-#x_min:
-#x_max:
-#y_min:
-#y_max:
-#z_min:
-#z_max:
-#   Bounds of the zone, toolhead coordinates. Default: unbounded.
-#   At least one is required.
-#speed:
-#accel:
-#   Limits (mm/s, mm/s^2) on every move that touches the zone.
-#   Default 10 and 500 for rails zones, none otherwise.
-#lock_homing:
-#   Refuse homing while this zone holds the toolhead (it entered and has
-#   not been released by NPZ_CLOSE/NPZ_CLEAR), or while the known position
-#   is inside. Default True for rails zones, False otherwise.
-#suspend_runout:
-#   Comma separated filament_switch_sensor names, disabled while the zone
-#   is open or holds the toolhead, then restored.
-#
-# rails zones only:
+[no_print_zone clips]          # bed clips 3 mm tall: fly over, never through
+type: keepout
+y_max: 12
+z_max: 4
+
+[no_print_zone dock]           # reached only along fixed paths
+type: rails
+x_min: 130
+x_max: 170
+y_max: 20
 rails:
-#   One rail per line (or comma separated), see above.
-#z_moves: deny
-#   Pure Z moves inside the zone: deny | idle | allow.
-#   idle = only with no print running or paused, and Z homed (a real
-#   homing, not the provisional Z of the safe_z_home hop).
-#z_tolerance: 0
-#   mm of Z change accepted on a rail move (bed mesh).
+    X150 Y30:5                 # at X150, inward from Y30 to Y5
+lock_homing: True              # no G28 while the toolhead is in the dock
+z_moves: deny
 ```
 
-## Commands
+The rules in short:
+
+- Coordinates are the **toolhead** position (`GET_POSITION`, line
+  `toolhead:`). Measure with the printer homed and add a margin.
+- A bound you leave out is unbounded. The faces are outside: with
+  `x_max: 11`, X 11 is allowed.
+- The whole move is checked, not only its end: a diagonal that cuts a corner
+  is refused.
+- `keepout` is never entered. `reserved` is entered between
+  `NPZ_OPEN ZONE=name` and `NPZ_CLOSE`. `rails` is entered only along its
+  rails: inward needs `NPZ_OPEN`, outward is always allowed.
+- A move that starts inside a keepout/reserved zone may leave it.
+- After a change, restart the Klipper service. The wizard does it for you.
 
 | command | |
 |---|---|
-| `NPZ_STATUS [ZONE=a,b]` | zones, state, toolhead position, runout sensors |
-| `NPZ_OPEN ZONE=a[,b]` | open zones. Refused during a print, except between `NPZ_PREP ENABLE=1` and `ENABLE=0`. Needs X/Y homed. |
-| `NPZ_CLOSE [ZONE=a,b]` | close zones (all by default). Waits for the moves to finish and releases the zones the toolhead has left. |
-| `NPZ_PREP ENABLE=1\|0` | print preparation window (START_PRINT): allows `NPZ_OPEN` during the print. `ENABLE=0` closes everything. |
-| `NPZ_CLEAR [ZONE=a,b] [CONFIRM=1]` | release a zone holding the toolhead after it left. `CONFIRM=1` when the position is unknown (motors were off, toolhead freed by hand). |
+| `NPZ_STATUS [ZONE=a,b]` | zones, state, toolhead position |
+| `NPZ_OPEN ZONE=a[,b]` | open zones (not during a print, except inside `NPZ_PREP`) |
+| `NPZ_CLOSE [ZONE=a,b]` | close zones (all by default), release the ones the toolhead left |
+| `NPZ_PREP ENABLE=1\|0` | preparation window in `START_PRINT` |
+| `NPZ_CLEAR [CONFIRM=1]` | release the homing lock after freeing the toolhead by hand |
 
-Any G-code error closes all zones and ends the preparation window.
+Guide sections:
 
-## Status variables
+- [Step by step](docs/configuration.md#step-by-step)
+- [Choosing the zone type](docs/configuration.md#choosing-the-zone-type)
+- [Option reference](docs/configuration.md#reference-no_print_zone-name)
+- [Rails in detail](docs/configuration.md#rails-in-detail)
+- [Z](docs/configuration.md#z-height-limits-and-z-moves)
+- [Macros](docs/configuration.md#using-zones-in-macros)
+- [Status variables](docs/configuration.md#status-variables)
+- [Errors when Klipper starts](docs/configuration.md#errors-when-klipper-starts)
+- [Errors on a move](docs/configuration.md#errors-on-a-move)
+- [Pitfalls and FAQ](docs/configuration.md#pitfalls-and-faq)
 
-`printer.no_print_zone`: `zones`, `open_zones`, `occupied_zones`, `prep`,
-`homing_locked` (true if `G28` would be refused), `runout_suspended`.
-
-`printer["no_print_zone NAME"]`: `type`, `min`, `max` (null = unbounded),
-`open`, `occupied`, `speed`, `accel`, `lock_homing`, `z_moves`, `rails`.
-Each rail has `text`, `axis`, `outer`, `inner`, and `x`/`y`/`z` (fixed
-coordinates or null). Macros can follow the rails instead of repeating the
-numbers:
-
-```jinja
-{% set zone = printer["no_print_zone cutter"] %}
-{% set down = zone.rails[0] %}
-G1 X{down.x} F3000
-G1 Y{down.inner} F{zone.speed * 60}
-```
-
-## Using it
-
-- **Purge lines and wipes**: `NPZ_OPEN ZONE=...` at the start of the macro,
-  `NPZ_CLOSE` at the end. In `START_PRINT`, wrap the preparation in
-  `NPZ_PREP ENABLE=1` ... `NPZ_PREP ENABLE=0`.
-- **Slicer**: also exclude the zones from the bed in the slicer
-  (`bed_exclude_area` in OrcaSlicer/PrusaSlicer). If an object lands in a
-  zone, the module stops the print at the first move into it.
-- **G28 macros** that do things before homing (lower motor currents,
-  sensorless): check `printer.no_print_zone.homing_locked` first.
-- [`examples/basic.cfg`](examples/basic.cfg): bucket and brush limited in Z,
-  bed clips, a dock with rails.
-- [`examples/voron-jabberwocky-cutter.cfg`](examples/voron-jabberwocky-cutter.cfg):
-  a real machine. Voron 2.4 with a JabberWocky toolhead whose cutter lever is
-  pressed against the front left frame corner, with the cut and purge
-  macros.
+Examples: [`examples/basic.cfg`](examples/basic.cfg) (bucket and brush,
+clips, dock), and
+[`examples/voron-jabberwocky-cutter.cfg`](examples/voron-jabberwocky-cutter.cfg).
+The second is a real Voron 2.4 whose JabberWocky cutter lever is pressed
+against the front left frame corner, with its cut and purge macros.
 
 ## Tests
 
@@ -319,6 +238,14 @@ MCU dictionary it also loads the generated configuration in Klipper:
 
 ```sh
 tests/test_install.sh [~/klipper tests/.build/stm32f446.dict]
+```
+
+The documentation itself: every zone example in this README and in
+[docs/configuration.md](docs/configuration.md) is loaded by Klipper, and the
+macro examples of the guide are run against their zones:
+
+```sh
+~/klippy-env/bin/python tests/test_docs.py --klipper ~/klipper --dict tests/.build/stm32f446.dict
 ```
 
 Dry-run tests with the real Klipper in batch mode. Klipper reads G-code from

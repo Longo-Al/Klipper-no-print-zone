@@ -275,7 +275,7 @@ class Wizard(unittest.TestCase):
         for line in ('type: reserved', 'x_min: 229', 'x_max: 301',
                      'y_min: 284', 'z_max: 13', 'suspend_runout: fs1'):
             self.assertIn(line + '\n', t, out)
-        self.assertNotIn('y_max', t.split('[no_print_zone bucket]')[1])
+        self.assertNotIn('y_max', t.split('\n[no_print_zone bucket]')[1])
 
     def test_unhomed_position_refused(self):
         self.printer.homed = ''
