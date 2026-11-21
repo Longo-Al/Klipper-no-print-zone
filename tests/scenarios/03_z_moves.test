@@ -1,0 +1,85 @@
+### Z01_z_in_dock_idle_homed
+#! expect: ok: dock: Z move (no print, Z homed)
+@down
+G1 Z10 F600
+G1 Z2 F600
+NPZ_STATUS
+
+### Z02_z_beyond_travel_limit
+#! expect: error: Move out of range
+@down
+G1 Z260 F600
+
+### Z03_z_combined_with_rail
+#! expect: error: The move also changes Z
+G28
+NPZ_OPEN ZONE=dock,purge
+G1 X25 Y25 Z2 F6000
+G1 X10.5 F3000
+G1 Y0 Z3 F600
+
+### Z04_z_during_print_preparation
+#! expect: error: allowed only while no print is running or paused
+#! sdfile: z_in_dock.gcode
+G28
+NPZ_PREP ENABLE=1
+NPZ_OPEN ZONE=dock,purge
+G1 X25 Y25 F6000
+G1 X10.5 F3000
+G1 Y0 F600
+G1 Z10 F600
+#! end
+SDCARD_PRINT_FILE FILENAME=z_in_dock.gcode
+
+# NOTE: after G28 the Z hop of safe_z_home leaves Z at 5: "G1 Z5" would not
+# move at all, the scenarios use other heights.
+
+### Z05_z_hop_with_z_not_homed
+# G28 X Y leaves Z unhomed; the toolhead goes onto the dock; G28 Z then
+# starts with the Z hop of safe_z_home, which must be refused there
+#! expect: error: Z is not homed (z_moves: idle)
+G28 X Y
+NPZ_OPEN ZONE=dock,purge
+G1 X25 Y25 F6000
+G1 X10.5 F3000
+G1 Y0 F600
+G28 Z
+
+### Z06_z_deny_policy
+#! set: no_print_zone dock | z_moves | deny
+#! expect: error: (z_moves: deny)
+@down
+G1 Z10 F600
+
+### Z07_z_allow_policy_in_print
+#! set: no_print_zone dock | z_moves | allow
+#! expect: ok: dock: Z move
+#! sdfile: z_allow.gcode
+G28
+NPZ_PREP ENABLE=1
+NPZ_OPEN ZONE=dock,purge
+G1 X25 Y25 F6000
+G1 X10.5 F3000
+G1 Y0 F600
+G1 Z10 F600
+G1 Y25 F600
+NPZ_PREP ENABLE=0
+#! end
+SDCARD_PRINT_FILE FILENAME=z_allow.gcode
+
+### Z08_rail_with_mesh_like_z_drift
+#! set: no_print_zone dock | z_tolerance | 0.2
+#! expect: ok: dock: inward on rail 'X10.5 Y27:0'
+G28
+NPZ_OPEN ZONE=dock,purge
+G1 X25 Y25 Z2 F6000
+G1 X10.5 F3000
+G1 Y0 Z2.1 F600
+G1 Y25 Z2 F600
+
+### Z09_z_hop_outside_zones
+#! expect: ok
+G28
+G28
+G1 X100 Y100 Z1 F6000
+G28

@@ -1,0 +1,78 @@
+### H01_occupied_saved
+#! expect: ok: HOLDS TOOLHEAD
+@down
+NPZ_STATUS
+
+### H02_after_restart_g28_refused
+# state kept from H01: after a restart X/Y are unknown, the Z hop of
+# safe_z_home is the first move and is already refused
+#! keep_state
+#! expect: error: may still hold the toolhead
+G28
+
+### H03_after_restart_runout_suspended
+#! keep_state
+#! expect: ok: runout1 SUSPENDED
+NPZ_STATUS
+
+### H04_after_restart_g28_x_refused
+#! keep_state
+#! set: safe_z_home | z_hop | 0
+#! expect: error: Homing blocked by no_print_zone
+G28 X
+
+### H05_clear_needs_confirm
+#! keep_state
+#! expect: error: toolhead position unknown
+NPZ_CLEAR
+
+### H06_clear_confirmed
+#! keep_state
+#! expect: ok: outside all zones
+#! log_has: zone dock released
+#! log_has: runout sensor runout1 restored
+NPZ_CLEAR CONFIRM=1
+G28
+NPZ_STATUS
+
+### H07_homing_with_lever_pressed
+#! expect: error: Homing blocked by no_print_zone
+@down
+G1 X6 F600
+G28
+
+### H08_homing_forced_inside
+#! expect: error: Homing blocked by no_print_zone: the toolhead
+G28
+SET_KINEMATIC_POSITION X=8 Y=5 Z=5
+G28
+
+### H09_clear_while_inside
+#! expect: error: is still inside dock
+@down
+SET_KINEMATIC_POSITION X=8 Y=0 Z=5
+NPZ_CLEAR
+
+### H10_buzz_while_occupied
+#! expect: error: STEPPER_BUZZ on stepper_x is blocked
+@down
+STEPPER_BUZZ STEPPER=stepper_x
+
+### H11_state_unreadable
+#! state: this is not json
+#! expect: ok: state file unreadable
+NPZ_STATUS
+
+### H12_state_unknown_zone
+#! state: {"occupied": {"old_name": "x"}}
+#! expect: ok: no longer configured
+NPZ_STATUS
+
+### H13_runout_suspended_while_open
+#! expect: ok: runout: runout1 SUSPENDED
+#! log_has: runout sensor runout1 restored
+G28
+NPZ_OPEN ZONE=dock
+NPZ_STATUS
+NPZ_CLOSE
+NPZ_STATUS

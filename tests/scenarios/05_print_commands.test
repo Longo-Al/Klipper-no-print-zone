@@ -1,0 +1,68 @@
+### P01_print_cannot_open
+#! expect: error: zones cannot be opened during a print
+#! sdfile: open_in_print.gcode
+G28
+G1 X100 Y100 F6000
+NPZ_OPEN ZONE=purge
+#! end
+SDCARD_PRINT_FILE FILENAME=open_in_print.gcode
+
+### P02_prep_then_closed
+#! expect: error: enters reserved zone 'purge'
+#! sdfile: prep.gcode
+G28
+NPZ_PREP ENABLE=1
+NPZ_OPEN ZONE=purge
+G1 X25 Y30 F6000
+G1 X5 F6000
+G1 Y100 F6000
+G1 X25 F6000
+NPZ_PREP ENABLE=0
+G1 X100 Y100 F6000
+G1 X5 Y60 F6000
+#! end
+SDCARD_PRINT_FILE FILENAME=prep.gcode
+
+### P03_open_after_prep
+#! expect: error: zones cannot be opened during a print
+#! sdfile: after_prep.gcode
+G28
+NPZ_PREP ENABLE=1
+NPZ_PREP ENABLE=0
+NPZ_OPEN ZONE=purge
+#! end
+SDCARD_PRINT_FILE FILENAME=after_prep.gcode
+
+### P04_force_move_x
+#! expect: error: FORCE_MOVE on stepper_x is blocked
+FORCE_MOVE STEPPER=stepper_x DISTANCE=5 VELOCITY=5
+
+### P05_force_move_z
+#! expect: error: FORCE_MOVE on stepper_z is blocked
+FORCE_MOVE STEPPER=stepper_z DISTANCE=5 VELOCITY=5
+
+### P06_force_move_extruder
+#! expect: ok
+FORCE_MOVE STEPPER=extruder DISTANCE=5 VELOCITY=5
+
+### P07_force_move_allowed_by_option
+#! set: no_print_zone | block_force_move | False
+#! expect: ok
+FORCE_MOVE STEPPER=stepper_x DISTANCE=1 VELOCITY=5
+
+### P08_version_warning
+#! set: no_print_zone | tested_klipper_version | v0.0.0-test
+#! expect: ok: tested with Klipper v0.0.0-test
+NPZ_STATUS
+
+### P09_version_same_no_warning
+#! set: no_print_zone | tested_klipper_version | {VERSION}
+#! expect: ok
+#! log_not: tested with Klipper
+NPZ_STATUS
+
+### P10_close_selected
+#! expect: ok: open=brush
+G28
+NPZ_OPEN ZONE=purge,brush
+NPZ_CLOSE ZONE=purge

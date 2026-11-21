@@ -1,0 +1,44 @@
+### C01_rail_outside_zone
+#! set: no_print_zone dock | rails | X20 Y27:0
+#! expect: error: is outside the zone, the rail would never enter it
+NPZ_STATUS
+
+### C02_rail_inner_end_outside
+#! set: no_print_zone dock | rails | X10.5 Y50:30
+#! expect: error: the inner end Y30 must be inside the zone
+NPZ_STATUS
+
+### C03_rail_two_ranges
+#! set: no_print_zone dock | rails | X10.5:5 Y27:0
+#! expect: error: only one axis may have a range
+NPZ_STATUS
+
+### C04_rail_beyond_travel
+#! set: no_print_zone dock | rails | X10.5 Y27:-5
+#! expect: error: leaves the travel range of Y
+NPZ_STATUS
+
+### C05_bad_type
+#! set: no_print_zone brush | type | wall
+#! expect: error: is not a valid choice
+NPZ_STATUS
+
+### C06_rails_on_reserved_zone
+#! set: no_print_zone purge | rails | X5 Y100:30
+#! expect: error: Option 'rails' is not valid in section 'no_print_zone purge'
+NPZ_STATUS
+
+### C07_min_above_max
+#! set: no_print_zone purge | y_min | 250
+#! expect: error: y_min must be below y_max
+NPZ_STATUS
+
+### C08_unknown_runout_sensor
+#! set: no_print_zone dock | suspend_runout | nope
+#! expect: error: no filament_switch_sensor named 'nope'
+NPZ_STATUS
+
+### C09_bad_zone_name
+#! set: no_print_zone bad-name | type | keepout
+#! expect: error: section must be named [no_print_zone NAME]
+NPZ_STATUS

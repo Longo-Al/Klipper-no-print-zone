@@ -1,0 +1,119 @@
+### R01_far_from_zones
+#! expect: ok: outside all zones
+G28
+G1 X100 Y100 F6000
+G1 X290 Y290 F6000
+NPZ_STATUS
+
+### R02_reserved_closed
+#! expect: error: enters reserved zone 'purge'
+G28
+G1 X5 Y100 F6000
+
+### R03_reserved_open
+#! expect: ok: purge: inside open zone
+#! log_not: purge: leaving
+G28
+NPZ_OPEN ZONE=purge
+G1 X25 Y30 F6000
+G1 X5 F6000
+G1 Y150 F6000
+G1 X50 F6000
+NPZ_CLOSE
+G1 X100 Y100 F6000
+
+### R04_reserved_leave_after_close
+#! expect: ok: purge: leaving reserved zone
+G28
+NPZ_OPEN ZONE=purge
+G1 X25 Y100 F6000
+G1 X5 F6000
+NPZ_CLOSE
+G1 X50 Y120 F6000
+
+### R05_reserved_crossing_closed
+#! expect: error: enters reserved zone 'purge'
+G28
+G1 X25 Y100 F6000
+G1 X25 Y30 F6000
+G1 X12 Y210 F6000
+
+### R06_face_is_outside
+#! expect: ok
+#! log_not: purge:
+G28
+G1 X15 Y100 F6000
+G1 X15 Y190 F6000
+G1 X25 Y190 F6000
+
+### R07_keepout_through
+#! expect: error: enters keepout zone 'clip'
+G28
+G1 X290 Y10 Z2 F6000
+
+### R08_keepout_fly_over
+#! expect: ok
+#! log_not: clip:
+G28
+G1 Z10 F600
+G1 X290 Y10 F6000
+G1 Z5 F600
+G1 X250 Y10 F6000
+
+### R09_keepout_descend_into
+#! expect: error: enters keepout zone 'clip'
+G28
+G1 Z10 F600
+G1 X290 Y10 F6000
+G1 Z3 F600
+
+### R10_keepout_cannot_open
+#! expect: error: is a keepout zone and cannot be opened
+G28
+NPZ_OPEN ZONE=clip
+
+### R11_keepout_leave_from_inside
+#! expect: ok: clip: leaving keepout zone
+G28
+SET_KINEMATIC_POSITION X=290 Y=10 Z=2
+G1 X250 F6000
+
+### R12_brush_above_ok_below_refused
+#! expect: error: enters reserved zone 'brush'
+G28
+G1 Z10 F600
+G1 X230 Y290 F6000
+G1 Z5 F600
+
+### R14_z_not_homed_z_limited_ignored
+#! expect: ok
+#! log_not: clip:
+G28 X Y
+G1 X290 Y10 F6000
+G1 X250 Y10 F6000
+
+### R15_z_not_homed_full_height
+#! set: no_print_zone | unknown_z | full_height
+#! expect: error: enters keepout zone 'clip'
+G28 X Y
+G1 X290 Y10 F6000
+
+### R16_homing_corner_inside_bucket_footprint
+# brush moved under the homing corner: the travel to the safe_z_home point
+# crosses its footprint before Z is homed
+#! set: no_print_zone brush | x_max | 300
+#! expect: ok
+G28
+
+### R13_brush_open_slow
+#! expect: ok: speed limited to 50.0 mm/s
+G28
+G1 Z10 F600
+NPZ_OPEN ZONE=brush
+G1 X230 Y290 F6000
+G1 Z5 F600
+G1 X210 F12000
+G1 X250 F12000
+G1 Z10 F600
+NPZ_CLOSE
+G1 X150 Y150 F6000

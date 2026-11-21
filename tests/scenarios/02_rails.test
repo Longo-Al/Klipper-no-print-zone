@@ -1,0 +1,168 @@
+### T01_side_entry
+#! expect: error: refused in rails zone 'dock'
+G28
+G1 X30 Y10 F6000
+G1 X5 Y10 F6000
+
+### T02_diagonal_cuts_corner
+#! expect: error: refused in rails zone 'dock'
+G28
+NPZ_OPEN ZONE=dock,purge
+G1 X30 Y2 F6000
+G1 X2 Y30 F6000
+
+### T03_face_x11_is_outside
+#! expect: ok
+#! log_not: dock:
+G28
+G1 X20 Y20 F6000
+G1 X11 Y5 F6000
+G1 X11 Y0 F6000
+G1 X30 Y0 F6000
+
+### T04_just_inside_x10.99
+#! expect: error: refused in rails zone 'dock'
+G28
+G1 X20 Y20 F6000
+G1 X10.99 F6000
+
+### T05_rail_in_while_closed
+#! expect: error: follows rail 'X10.5 Y27:0' into zone 'dock', which is closed
+G28
+NPZ_OPEN ZONE=purge
+G1 X25 Y25 F6000
+G1 X10.5 F3000
+G1 Y0 F600
+
+### T06_wrong_x
+#! expect: error: refused in rails zone 'dock'
+G28
+NPZ_OPEN ZONE=dock,purge
+G1 X25 Y25 F6000
+G1 X8 F3000
+G1 Y0 F600
+
+### T07_from_beyond_outer_end
+#! expect: error: refused in rails zone 'dock'
+G28
+NPZ_OPEN ZONE=dock,purge
+G1 X10.5 Y100 F6000
+G1 Y0 F600
+
+### T08_full_cycle
+#! expect: ok: dock: inward on rail 'Y0 X10.5:0'
+#! log_has: dock: outward on rail 'X10.5 Y27:0'
+#! log_has: speed limited to 10.0 mm/s
+#! log_has: zone dock released
+@down
+G1 X0 F6000
+G1 X10.5 F6000
+G1 Y25 F6000
+G1 X25 F3000
+NPZ_CLOSE
+G28
+NPZ_STATUS
+
+### T09_outward_past_outer_end
+#! expect: ok: zone dock released
+@down
+G1 Y40 F6000
+G1 X25 F6000
+NPZ_CLOSE
+
+### T10_side_exit_on_press_rail
+#! expect: ok: dock: outward on rail 'Y0 X10.5:0'
+@down
+G1 X12 F3000
+NPZ_CLOSE
+
+### T11_y_while_pressed
+#! expect: error: refused in rails zone 'dock'
+@down
+G1 X6 F600
+NPZ_CLOSE
+G1 Y30 F600
+
+### T12_release_and_climb_closed
+#! expect: ok: zone dock released
+@down
+G1 X6 F600
+NPZ_CLOSE
+G1 X10.5 F6000
+G1 Y22 F6000
+G1 X25 F6000
+NPZ_CLOSE
+G28
+
+### T13_climb_into_closed_purge
+#! expect: error: enters reserved zone 'purge'
+@down
+NPZ_CLOSE
+G1 Y30 F6000
+
+### T14_press_while_closed
+#! expect: error: follows rail 'Y0 X10.5:0' into zone 'dock', which is closed
+@down
+NPZ_CLOSE
+G1 X8 F600
+
+### T15_press_at_wrong_y
+#! expect: error: refused in rails zone 'dock'
+G28
+NPZ_OPEN ZONE=dock,purge
+G1 X25 Y25 F6000
+G1 X10.5 F3000
+G1 Y5 F600
+G1 X8 F600
+
+### T16_release_in_1mm_jogs
+#! expect: ok: zone dock released
+@down
+G1 X0 F600
+G91
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G1 X1 F600
+G90
+NPZ_CLOSE
+G28
+
+### T17_y_at_x10_on_press_rail
+#! expect: error: refused in rails zone 'dock'
+@down
+G1 X0 F600
+G1 X10 F600
+G1 Y5 F600
+
+### T18_forced_inside_off_rail
+#! expect: error: refused in rails zone 'dock'
+G28
+SET_KINEMATIC_POSITION X=8 Y=5 Z=5
+G1 Y30 F600
+
+### T19_forced_on_rail_climb
+#! expect: ok: dock: outward on rail 'X10.5 Y27:0'
+G28
+SET_KINEMATIC_POSITION X=10.5 Y=5 Z=5
+G1 Y22 F6000
+
+### T20_x_move_with_y_unknown
+#! expect: error: home X and Y first
+G28 X
+G1 X5 F6000
+
+### T21_open_needs_xy_homed
+#! expect: error: NPZ_OPEN: home X and Y first
+NPZ_OPEN ZONE=purge
+
+### T22_unknown_zone
+#! expect: error: unknown zone 'foo'
+NPZ_OPEN ZONE=foo
