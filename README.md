@@ -61,24 +61,77 @@ z_max: 12
 
 ## Install
 
+Log in to the Klipper host (for example `ssh pi@<printer address>`) as the
+user that runs Klipper, and paste one line:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Longo-Al/Klipper-no-print-zone/main/install.sh | bash
+```
+
+The installer:
+
+1. downloads the repository into `~/klipper-no-print-zone`;
+2. links `no_print_zone.py` into Klipper's extras and keeps Klipper's git
+   tree clean;
+3. if no zone is configured yet, creates `no_print_zone.cfg` next to
+   `printer.cfg` and includes it. Without zones the module does nothing;
+4. asks whether to show updates in the web interface (Moonraker update
+   manager);
+5. restarts Klipper only if needed and **never during a print**, then checks
+   that it comes back ready;
+6. offers the zone wizard.
+
+Every file it edits is backed up first, in `~/printer_data/backup/no_print_zone/`.
+It finds the printer by itself, also with several printers on one host (it
+asks). See `install.sh --help` for the options.
+
+- **Update**: run the same line again. Klipper is restarted only if the
+  module itself changed. Or use the web interface, if you enabled updates
+  there.
+- **Uninstall**: `~/klipper-no-print-zone/install.sh --uninstall`. Your zone
+  files are kept. If zones are still defined in your config, it tells you
+  where, because Klipper would not start without the module.
+- **Check on your Klipper version**: `~/klipper-no-print-zone/install.sh --test`
+  builds an MCU dictionary and runs the dry tests. It takes a few minutes and
+  nothing moves.
+
+### Define zones: the wizard
+
+```sh
+~/klipper-no-print-zone/install.sh --wizard
+```
+
+The wizard **never moves the printer**. You move the toolhead from the web
+interface, press Enter, and it reads the position:
+
+- **area**: two opposite corners. A side at the end of travel can reach the
+  frame;
+- **height**: for a low obstacle, the nozzle just above its top, so the
+  toolhead may fly over it;
+- **margin** added around the zone;
+- **rails**: for each one, its outer end and then its inner end;
+- speed, homing lock, Z policy and runout sensors.
+
+It checks the zone with the module's own code, writes the section, restarts
+Klipper and confirms that the zone is active. If Klipper does not start, it
+offers to remove the zone again. You can also type coordinates instead of
+reading them, and remove zones.
+
+### Manual install
+
 ```sh
 cd ~
 git clone https://github.com/Longo-Al/Klipper-no-print-zone.git klipper-no-print-zone
 ./klipper-no-print-zone/install.sh
 ```
 
-`install.sh` links `no_print_zone.py` into `~/klipper/klippy/extras/` and
-hides it from Klipper's git status. Add your zones to `printer.cfg` (see
-[`examples/`](examples/)), then restart the service:
-
-```sh
-sudo systemctl restart klipper
-```
+Or only link the file, write the zones yourself (see [`examples/`](examples/))
+and restart the **service** with `sudo systemctl restart klipper`.
 
 A `RESTART` / `FIRMWARE_RESTART` command does **not** reload Python modules:
 after changing `no_print_zone.py`, restart the service.
 
-Optional, Moonraker updates (`moonraker.conf`):
+The update manager entry the installer adds to `moonraker.conf`:
 
 ```ini
 [update_manager no_print_zone]
@@ -89,7 +142,7 @@ primary_branch: main
 managed_services: klipper
 ```
 
-If Klipper is reinstalled, run `install.sh` again. Until you do, Klipper
+If Klipper is reinstalled, run the installer again. Until you do, Klipper
 refuses to start (unknown section), so it fails safe.
 
 ## Coordinates and geometry
@@ -253,10 +306,19 @@ G1 Y{down.inner} F{zone.speed * 60}
 
 ## Tests
 
-Unit tests of the rules, no Klipper needed:
+Unit tests of the rules, of the installer helpers and of the wizard (with a
+fake Moonraker). No Klipper needed:
 
 ```sh
 python3 -m unittest discover -s tests -p 'test_*.py'
+```
+
+Installer in a sandbox: install, a second run that changes nothing, uninstall
+back to the original files, and the one-line path. With a Klipper tree and an
+MCU dictionary it also loads the generated configuration in Klipper:
+
+```sh
+tests/test_install.sh [~/klipper tests/.build/stm32f446.dict]
 ```
 
 Dry-run tests with the real Klipper in batch mode. Klipper reads G-code from
