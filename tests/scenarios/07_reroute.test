@@ -1,0 +1,120 @@
+### AR01_print_square_around_zones
+# A square at the edges of the bed, printed from a file: every corner hits a
+# zone (clip, dock, purge, brush) and the print goes on around them
+#! expect: ok: rerouted
+#! log_has: print moves into zone 'clip' are rerouted
+#! log_has: print moves into zone 'dock' are rerouted
+#! log_has: print moves into zone 'purge' are rerouted
+#! log_has: print moves into zone 'brush' are rerouted
+#! log_not: Move out of range
+#! sdfile: square.gcode
+G28
+G90
+M83
+G1 Z0.3 F600
+G1 X20 Y30 F6000
+G1 X290 Y30 E10 F3000
+G1 X290 Y5 E1
+G1 X5 Y5 E10
+G1 X5 Y290 E10
+G1 X290 Y290 E10
+G1 X290 Y30 E10
+G1 X150 Y150 Z10 F6000
+#! end
+SDCARD_PRINT_FILE FILENAME=square.gcode
+
+### AR02_console_move_still_refused
+#! expect: error: enters keepout zone 'clip'
+G28
+G1 Z0.3 F600
+G1 X290 Y30 F6000
+G1 X290 Y5 F6000
+
+### AR03_stop_mode
+#! set: no_print_zone | print_moves | stop
+#! expect: error: enters keepout zone 'clip'
+#! sdfile: stop.gcode
+G28
+G1 Z0.3 F600
+G1 X290 Y30 F6000
+G1 X290 Y5 F6000
+#! end
+SDCARD_PRINT_FILE FILENAME=stop.gcode
+
+### AR04_prep_is_not_rerouted
+#! expect: error: enters reserved zone 'purge'
+#! sdfile: prep_reroute.gcode
+G28
+NPZ_PREP ENABLE=1
+G1 X25 Y60 F6000
+G1 X5 Y60 F6000
+#! end
+SDCARD_PRINT_FILE FILENAME=prep_reroute.gcode
+
+### AR05_after_prep_rerouted
+#! expect: ok: rerouted
+#! sdfile: after_prep_reroute.gcode
+G28
+NPZ_PREP ENABLE=1
+NPZ_OPEN ZONE=purge
+G1 X25 Y30 F6000
+G1 X5 F6000
+G1 Y100 F6000
+G1 X25 F6000
+NPZ_PREP ENABLE=0
+G1 X100 Y100 F6000
+G1 X5 Y60 F6000
+G1 X100 Y60 F6000
+#! end
+SDCARD_PRINT_FILE FILENAME=after_prep_reroute.gcode
+
+### AR06_arcs
+#! set: gcode_arcs | resolution | 1.0
+#! expect: ok: rerouted
+#! log_has: around clip
+#! sdfile: arc.gcode
+G28
+G90
+M83
+G1 Z0.3 F600
+G1 X250 Y40 F6000
+G3 X300 Y40 I25 J0 E5 F3000
+G1 X150 Y150 F6000
+#! end
+SDCARD_PRINT_FILE FILENAME=arc.gcode
+
+### AR07_exclude_object_in_front
+#! include: extra_exclude_object.cfg
+#! expect: ok: rerouted
+#! log_has: Excluding object B
+#! sdfile: objects.gcode
+G28
+G90
+M83
+EXCLUDE_OBJECT_DEFINE NAME=A CENTER=285,15 POLYGON=[[270,5],[300,5],[300,30],[270,30]]
+EXCLUDE_OBJECT_DEFINE NAME=B CENTER=150,150 POLYGON=[[140,140],[160,140],[160,160],[140,160]]
+EXCLUDE_OBJECT NAME=B
+G1 Z0.3 F600
+EXCLUDE_OBJECT_START NAME=A
+G1 X270 Y30 F6000
+G1 X300 Y5 E3 F3000
+G1 X270 Y30 E3
+EXCLUDE_OBJECT_END NAME=A
+EXCLUDE_OBJECT_START NAME=B
+G1 X140 Y140 F6000
+G1 X160 Y160 E2 F3000
+EXCLUDE_OBJECT_END NAME=B
+G1 X150 Y100 F6000
+#! end
+SDCARD_PRINT_FILE FILENAME=objects.gcode
+
+### AR08_status_counts
+#! expect: ok: rerouted in this print: clip 1
+#! sdfile: count.gcode
+G28
+G1 Z0.3 F600
+G1 X270 Y5 F6000
+G1 X300 Y35 F6000
+NPZ_STATUS
+#! end
+SDCARD_PRINT_FILE FILENAME=count.gcode

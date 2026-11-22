@@ -8,6 +8,7 @@ NPZ_OPEN ZONE=purge
 SDCARD_PRINT_FILE FILENAME=open_in_print.gcode
 
 ### P02_prep_then_closed
+#! set: no_print_zone | print_moves | stop
 #! expect: error: enters reserved zone 'purge'
 #! sdfile: prep.gcode
 G28

@@ -38,7 +38,13 @@ zones for you.
   limits are always checked first.
 - Checks every move before it is queued: G-code files, macros, web interface
   jogs, arcs, bed mesh segments, probing travel. A refused move never starts.
-  During a print, the print stops with the error.
+- **During a print, moves go around the zones** instead of stopping the
+  print: the part of a move that would run inside a closed zone is replaced
+  by a path along its faces. A square printed at the edges of the bed comes
+  out with a notch shaped like the zone. The zone faces are extruded once per
+  layer, so infill lines crossing a zone do not pile material on its edge.
+  Outside a print, in a paused print and during `NPZ_PREP`, a move into a
+  closed zone is still an error ([details](docs/configuration.md#print-moves-going-around-the-zones)).
 - Speed and acceleration limits inside a zone.
 - **Homing lock**: while a `rails` zone holds the toolhead (lever pressed
   against the frame, tool docked), `G28` and the Z hop of `safe_z_home` are
@@ -56,8 +62,12 @@ zones for you.
 - The module checks the **commanded** position. Lost steps, a wrong homing or
   `SET_KINEMATIC_POSITION` are not covered: keep safety margins in the bounds.
 - It is a software guard, not a substitute for mechanical design.
+- A print that went around a zone **differs from the G-code file** there.
+  The console says so at the first rerouted move of each zone. Exclude the
+  zones in the slicer anyway (`bed_exclude_area`).
 - It hooks into Klipper internals: `kinematics.check_move`,
-  `toolhead.drip_move`, `kinematics.set_position` and the homing events. It
+  `toolhead.drip_move`, `kinematics.set_position`, the move transform chain
+  of `gcode_move` (like `bed_mesh`) and the homing events. It
   was written and tested on **Klipper v0.13.0-743**. Set
   `tested_klipper_version`, and run the tests again after every Klipper
   update. A hook that silently stops being called is the real risk, and only
@@ -194,6 +204,9 @@ The rules in short:
   `NPZ_OPEN ZONE=name` and `NPZ_CLOSE`. `rails` is entered only along its
   rails: inward needs `NPZ_OPEN`, outward is always allowed.
 - A move that starts inside a keepout/reserved zone may leave it.
+- During a print, moves into closed zones go around them
+  (`print_moves: reroute`, the default); `print_moves: stop` stops the print
+  instead.
 - After a change, restart the Klipper service. The wizard does it for you.
 
 | command | |
@@ -211,6 +224,7 @@ Guide sections:
 - [Option reference](docs/configuration.md#reference-no_print_zone-name)
 - [Rails in detail](docs/configuration.md#rails-in-detail)
 - [Z](docs/configuration.md#z-height-limits-and-z-moves)
+- [Print moves: going around the zones](docs/configuration.md#print-moves-going-around-the-zones)
 - [Macros](docs/configuration.md#using-zones-in-macros)
 - [Status variables](docs/configuration.md#status-variables)
 - [Errors when Klipper starts](docs/configuration.md#errors-when-klipper-starts)

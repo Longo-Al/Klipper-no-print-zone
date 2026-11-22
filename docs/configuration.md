@@ -15,6 +15,7 @@ section, or let the wizard write the zone for you
 - [Rails in detail](#rails-in-detail)
 - [Z: height limits and Z moves](#z-height-limits-and-z-moves)
 - [Opening and closing zones](#opening-and-closing-zones)
+- [Print moves: going around the zones](#print-moves-going-around-the-zones)
 - [Homing lock and the state file](#homing-lock-and-the-state-file)
 - [Using zones in macros](#using-zones-in-macros)
 - [Status variables](#status-variables)
@@ -165,8 +166,9 @@ See [Using zones in macros](#using-zones-in-macros).
 
 Also mark the zones as excluded in the slicer: `bed_exclude_area` in
 OrcaSlicer and PrusaSlicer. If an object lands in a zone anyway, the print
-stops with an error at the first move into it, instead of printing into the
-obstacle.
+goes around the zone and the console tells you so (see
+[Print moves](#print-moves-going-around-the-zones)); with
+`print_moves: stop` it stops with an error at the first move into it.
 
 ---
 
@@ -247,6 +249,7 @@ zones must open both (`NPZ_OPEN ZONE=cutter,purge`).
 |---|---|---|---|
 | typical use | bed clips, sensors, frame parts | purge bucket, brush, purge strip | dock, cutter lever, wiper arm |
 | entering, zone closed | refused | refused | refused |
+| print move, zone closed | goes around it | goes around it | goes around it |
 | entering, zone open | (cannot be opened) | allowed | only inward along a rail |
 | moving inside | allowed when the move started certainly inside | allowed if open, or if started certainly inside | only along a rail |
 | leaving | allowed (started inside) | allowed (started inside) | only outward along a rail, always allowed |
@@ -280,6 +283,9 @@ All options are optional. The section itself may be left out.
 #tested_klipper_version:
 #block_force_move: True
 #unknown_z: ignore
+#print_moves: reroute
+#reroute_extrude: first
+#reroute_margin: 0
 ```
 
 | option | values | default | meaning |
@@ -289,6 +295,9 @@ All options are optional. The section itself may be left out.
 | `tested_klipper_version` | text | none | the Klipper version (as `git describe` prints it, shown by the web interface) you ran the tests on. When Klipper runs another version, a warning appears in the web interface until you test again and update the value. |
 | `block_force_move` | True/False | True | refuse `FORCE_MOVE` on the steppers of the kinematics (X, Y, Z...). `FORCE_MOVE` would move the toolhead without any check. The extruder is never blocked. |
 | `unknown_z` | `ignore`, `full_height` | `ignore` | `keepout`/`reserved` zones with a Z bound, while Z is not homed: ignore them, or count them as full height (stricter, may block `G28`). |
+| `print_moves` | `reroute`, `stop` | `reroute` | what a print move into a closed zone does: go around the zone, or stop the print with an error. See [Print moves](#print-moves-going-around-the-zones). |
+| `reroute_extrude` | `first`, `never` | `first` | while going around a zone, extrude along its faces only where that layer has not been extruded yet (`first`), or never. |
+| `reroute_margin` | 0–5 mm | 0 | distance in X/Y between the path around a zone and its faces. Needed only with `skew_correction`, which moves X/Y after the rerouting. |
 
 ---
 
@@ -553,6 +562,101 @@ being entered from inside.
 
 ---
 
+## Print moves: going around the zones
+
+During a print, a move that would enter a **closed** zone is not refused:
+the module bends it around the zone and the print goes on.
+
+```
+  requested square                 what is printed
+  +----------------------+         +---------------+
+  |              ########|         |               |
+  |              ########|         |               +------+
+  |                      |         |                      |
+  |                      |         |                      |
+  +----------------------+         +----------------------+
+  ######## = zone in the back right corner (x_min 240, y_min 328)
+```
+
+**When.** All of these must hold:
+
+- `print_moves: reroute` (the default);
+- a print is running from the virtual SD card and is not paused;
+- outside `NPZ_PREP ENABLE=1` ... `ENABLE=0`;
+- X, Y and Z are homed.
+
+Zones that count: `keepout` zones always, `reserved` and `rails` zones while
+they are closed. An open zone is left alone: your macro is working in it.
+
+**How.**
+
+- The parts of the move outside the zones stay exactly as in the file.
+- The part that would run inside is replaced by the shortest path along the
+  faces of the zones, inside the travel area. The path bends only at the
+  corners of the zones. Zones that touch or overlap are walked around
+  together.
+- If the move ends inside, the toolhead stops at the nearest point of the
+  faces. The next move that leaves the zone starts from there.
+- A zone limited in Z is avoided only at the heights it covers, plus 1 mm
+  for the bed mesh. Above that, moves are untouched: the toolhead flies over
+  it. A path that must change height climbs or descends outside the zone.
+- A move that starts inside a zone may leave it, as for the checks.
+- Every piece of the new path still goes through the normal checks.
+
+**Extrusion.**
+
+- The parts that follow the file keep the extrusion of the file.
+- Along the faces, with `reroute_extrude: first`, a piece of face is extruded
+  the first time it is travelled in a layer, with the flow of the original
+  move. Later passes on the same piece in that layer only travel. Infill
+  lines crossing a zone therefore draw its outline once per layer, and do not
+  pile material on it. With `never` the faces are only travelled, and the
+  printed shape stays open where the zone is.
+- The material of the part inside the zone is dropped.
+- Retractions and wipes (negative extrusion) always happen in full, spread
+  along the path.
+
+**You are told.** The first rerouted move of each zone in a print shows in
+the console:
+
+```
+no_print_zone: print moves into zone 'clip' are rerouted around it: from here on the print differs from the G-code file
+```
+
+`klippy.log` has the path of the first 20 rerouted moves of each print.
+`NPZ_STATUS` and the `rerouted` status variable count them per zone.
+
+**What is not rerouted.** There, a move into a closed zone is an error, as
+before:
+
+- everything outside a print: console, web interface jogs, macros started by
+  hand;
+- a paused print: the `PAUSE`/`RESUME` macros, jogs while paused.
+  Exception: `RESUME` going back to a requested point that was inside a zone
+  goes back to the real point instead;
+- the print preparation inside `NPZ_PREP`: the start macro must open the
+  zones it uses;
+- homing and probing moves, which are not G-code moves.
+
+**Macros called by the print.** A macro run from the print file (`M600`, a
+wipe between colours) that moves into a closed zone is rerouted like the
+print: it never reaches the zone, silently. If it must enter the zone, wrap
+it in `NPZ_PREP ENABLE=1`, `NPZ_OPEN ZONE=...`, `NPZ_PREP ENABLE=0`.
+
+**When it cannot go around**, the print stops as before, with
+`cannot keep the print move ... out of zone(s) ...`. For example a zone that
+spans the whole width between the start and the end of the move.
+
+**Other move transforms.** The rerouting sits in the move chain of Klipper,
+in front of `bed_mesh`:
+
+- arcs reach it as short segments;
+- `exclude_object` places itself in front of it, which is fine;
+- `skew_correction` moves X/Y after it: set `reroute_margin` to a few tenths
+  of a mm.
+
+---
+
 ## Homing lock and the state file
 
 For zones with `lock_homing` (all rails zones by default):
@@ -702,6 +806,8 @@ the web interface:
 | `prep` | bool | inside `NPZ_PREP ENABLE=1` |
 | `homing_locked` | bool | `G28` would be refused now |
 | `runout_suspended` | list | runout sensors suspended by the module |
+| `print_moves` | text | `reroute` or `stop` |
+| `rerouted` | dict | zone name -> moves rerouted around it in the current print |
 
 `printer["no_print_zone NAME"]`
 
@@ -803,10 +909,13 @@ Klipper refuses to start and shows the message in the web interface.
 
 ## Errors on a move
 
-The move does not start. During a print, the print stops.
+The move does not start. During a print this happens only where nothing is
+rerouted (see [Print moves](#print-moves-going-around-the-zones)), or with
+`print_moves: stop`; the print stops.
 
 | message (shortened) | meaning | what to do |
 |---|---|---|
+| `cannot keep the print move ... out of zone(s) X` | during a print, a move into a zone that has no way around within the travel area | move the object, or change the zone |
 | `enters keepout zone 'X'` | the move touches a keepout zone | it is never allowed: go around it or above it |
 | `enters reserved zone 'X', which is closed` | entering a reserved zone without `NPZ_OPEN` | open it in your macro; a slicer object there needs `bed_exclude_area` |
 | `follows rail '...' into zone 'X', which is closed` | an inward rail move without `NPZ_OPEN` | `NPZ_OPEN ZONE=X` first |
@@ -850,8 +959,9 @@ dangerous, put the face beyond it.
 **Bed mesh.** It changes Z during X/Y moves only inside the mesh area. A
 rails zone over the mesh area needs `z_tolerance`.
 
-**Slicer objects in a zone.** The print stops at the first move into the
-zone. Exclude the zones in the slicer.
+**Slicer objects in a zone.** The print goes around the zone and the object
+comes out cut where the zone is (with `print_moves: stop`, the print stops
+at the first move into it). Exclude the zones in the slicer.
 
 **PAUSE inside a zone.** A pause parks with a straight move, which may be
 refused from inside a zone. Use `suspend_runout` for zones visited during a
