@@ -1192,7 +1192,7 @@ class NoPrintZone:
         return zone.kind == 'keepout' or zone.name not in self.open
 
     def _reroute_notify(self, name, text):
-        logging.info(text)
+        # respond_info also writes it to klippy.log
         self.printer.lookup_object('gcode').respond_info(text)
 
     def _handle_reset_file(self):
